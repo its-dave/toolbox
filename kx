@@ -50,6 +50,7 @@ highlightFile() {
   highlightStrings "${outputFile}" "\\${FG_YELLOW}" "\\${FG_DEFAULT}" " [1-5][0-9]m"
   highlightStrings "${outputFile}" "\\${FG_GREEN}" "\\${FG_DEFAULT}" "Running" " Ready" "Available" " [0-9]m| [0-9]+s| [0-9]m[0-9]+s"
   highlightStrings "${outputFile}" "\\${FG_GREEN_DARK}" "\\${FG_DEFAULT}" "running"
+  highlightStrings "${outputFile}" "\\${TEXT_FAINT}" "\\${TEXT_NORMAL}" "No +resources +found.*" "error: +the +server +doesn't +have +a +resource +type.*"
   if [[ -n ${highlightExtraString} ]]; then
     highlightStrings "${outputFile}" "\\${REV_ON}" "\\${REV_OFF}" "${highlightExtraString}"
   fi
