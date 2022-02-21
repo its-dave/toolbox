@@ -1,0 +1,410 @@
+#!/usr/bin/env bash
+
+# Constants
+. colours.sh
+CONTAINERS_NONE="none"
+CONTAINERS_UNREADY_RUNNING="unready-running"
+CONTAINERS_UNREADY="unready"
+CONTAINERS_ALL="all"
+HELM_RELEASE_NONE="none"
+HELM_RELEASE_NAMES="name"
+HELM_RELEASE_VERSIONS="version"
+TREE_CHAR_END=$'\xe2\x94\x94'
+TREE_CHAR_MIDDLE=$'\xe2\x94\x9c'
+TREE_CHAR_FLAT=$'\xe2\x94\x80'
+
+highlightFile() {
+  inputFile=${1}
+  outputFile=${2}
+  : > "${outputFile}"
+
+  # Highlight lines
+  while IFS='' read -r line || [[ -n "${line}" ]]; do
+    status=$(echo "${line}" | tr -s ' ' , | cut -d',' -f2)
+    IFS='/' read -r -a split <<< "${status}"
+    if [ "${#split[@]}" -eq 2 ] && [ ! "${split[0]}" -eq "${split[1]}" ]; then
+      # Highlight pods where not all containers are ready
+      if [[ "${line}" = *"Completed"* ]]; then
+        echo -e "${TEXT_FAINT}${line}${TEXT_NORMAL}" >> "${outputFile}"
+      else
+        echo -e "${FG_RED_DARK}${line}${FG_DEFAULT}" >> "${outputFile}"
+      fi
+    elif [[ "${line}" = *"${TREE_CHAR_FLAT}"* ]]; then
+      if [[ "${line}" = *"false"*"running"* ]]; then
+        # Fade container lines out, highlight running containers which are not ready
+        echo -e "${TEXT_FAINT}${line}${TEXT_NORMAL}" | ${SED} 's/'"${TREE_CHAR_FLAT}"'/&'"\\${FG_RED_DARK}"'/' >> "${outputFile}"
+      elif [[ ("${line}" = *"false"* && "${printContainers}" == "${CONTAINERS_UNREADY}") || "${printContainers}" == "${CONTAINERS_ALL}" ]]; then
+        # Fade container lines out
+        echo -e "${TEXT_FAINT}${line}${TEXT_NORMAL}" >> "${outputFile}"
+      fi
+    else
+      echo -e "${line}" >> "${outputFile}"
+    fi
+  done < "${inputFile}"
+
+  # Highlight specified strings
+  highlightStrings "${outputFile}" "\\${BG_RED_DARK}\\${FG_BLACK}" "\\${BG_DEFAULT}\\${FG_DEFAULT}" "[^ ]*Terminating" "[^ ]*Err[^ ]*" "[^ ]*BackOff" "DeadlineExceeded" "OOMKilled" "Failed" "NotReady" "MatchNodeSelector" "OutOfcpu"
+  highlightStrings "${outputFile}" "\\${FG_RED_DARK}" "\\${FG_DEFAULT}" "terminated"
+  highlightStrings "${outputFile}" "\\${BG_YELLOW_DARK}\\${FG_BLACK}" "\\${BG_DEFAULT}\\${FG_DEFAULT}" "Init:.\/." "PodInitializing" "Pending" "ContainerCreating" "Bound" "Released" "SchedulingDisabled"
+  highlightStrings "${outputFile}" "\\${FG_YELLOW_DARK}" "\\${FG_DEFAULT}" "waiting"
+  highlightStrings "${outputFile}" "\\${FG_YELLOW}" "\\${FG_DEFAULT}" " [1-5][0-9]m"
+  highlightStrings "${outputFile}" "\\${FG_GREEN}" "\\${FG_DEFAULT}" "Running" " Ready" "Available" " [0-9]m| [0-9]+s| [0-9]m[0-9]+s"
+  highlightStrings "${outputFile}" "\\${FG_GREEN_DARK}" "\\${FG_DEFAULT}" "running"
+  if [[ -n ${highlightExtraString} ]]; then
+    highlightStrings "${outputFile}" "\\${REV_ON}" "\\${REV_OFF}" "${highlightExtraString}"
+  fi
+
+  # Highlight zones
+  zoneColours=("\\${FG_MAGENTA}" "\\${FG_CYAN}" "\\${FG_GREEN_DARK}" "\\${FG_YELLOW_DARK}" "\\${FG_RED_DARK}")
+  for ((i=0; i<${#zoneNodes[@]}; i++)); do
+    for node in ${zoneNodes[${i}]}; do
+      highlightStrings "${outputFile}" "${zoneColours[${i}]}" "\\${FG_DEFAULT}" "${node#node/}"
+    done
+    highlightStrings "${outputFile}" "${zoneColours[${i}]}" "\\${FG_DEFAULT}" "${zones[${i}]}"
+  done
+}
+
+highlightStrings() {
+  file=${1}
+  highlightColour=${2}
+  resetColour=${3}
+  shift 3
+  for highlightString in "$@"; do
+    if [[ -n ${highlightString} ]]; then
+      echo -e "$(${SED} -E 's/'"${highlightString}"'/'"${highlightColour}"'&'"${resetColour}"'/g' < "${file}")" > "${file}"
+    fi
+  done
+}
+
+clearOutput() {
+  linesToClear=$1
+  if [ ! "${linesToClear}" -eq 0 ]; then
+    printf "\033[%sA" "${linesToClear}"
+    printf "\033[J"
+  fi
+}
+
+cleanup() {
+  if [[ -n ${cluster} ]]; then
+    echo
+  else
+    rm "${tempFile0}" "${tempFile1}" "${tempFile2}" 2>/dev/null
+  fi
+}
+trap cleanup EXIT
+
+getResources() {
+  "${kubectlCommand}" get "$1" "${kubectlCommandOptions[@]}" "${namespaceFlag[@]}" 2>&1 | "${grepCommand[@]}"  >> "${tempFile0}"
+  loggedOut=${PIPESTATUS[0]}
+  if [[ ${printContainers} != "${CONTAINERS_NONE}" && ("$1" == "po" || "$1" == "pod" || "$1" == "pods") ]]; then
+    "${kubectlCommand}" get pods "${namespaceFlag[@]}" -o json | \
+      # Get container info
+      jq '.items | .[] | '"${specifiedResourceSelector:-.}"' | .metadata.name as $name | .status.containerStatuses,.status.initContainerStatuses | .[]? | "\($name)@\(.name) \(.ready) \(.state | keys[0]) \(.restartCount)"' -r | \
+      # Combine with pod info
+      cat "${tempFile0}" - | \
+      # Sort alphabetically (ignoring header row)
+      (read -r; printf "%s\n" "${REPLY}"; sort) | \
+      # Remove pod names from container row
+      ${SED} 's/.*@/@@@@/' | \
+      # Format into columns
+      column -t | \
+      # Add tree characters
+      ${SED} 's/@@@@/ '"${TREE_CHAR_END}${TREE_CHAR_FLAT}"' /' | \
+      # Grep and append to file
+      "${grepCommand[@]}" >> "${tempFile1}"
+  elif [[ -n "${printNodeInfo}" && ("$1" == "node" || "$1" == "nodes") ]]; then
+    "${kubectlCommand}" describe node | grep "Name:\|cpu.*%\|memory.*%" | while read -r nodeOutput; do
+      if [[ "${nodeOutput}" = "Name:"* ]]; then
+        echo -n "$(awk '{print $2}' <<< "${nodeOutput}")@"
+      elif [[ "${nodeOutput}" = *"cpu"* ]]; then
+        cpuRequestPercent=$(awk '{gsub("\\(|\\)|%","");print $3}' <<< "${nodeOutput}")
+        cpuRequestsTwentieths=$(("${cpuRequestPercent}" / 5))
+        startColour="${BG_CYAN}"
+        endColour="${BG_GREY}"
+        [ "${cpuRequestPercent}" -ge 50 ] && startColour="${BG_GREEN}"
+        [ "${cpuRequestPercent}" -ge 70 ] && startColour="${BG_YELLOW}"
+        [ "${cpuRequestPercent}" -ge 90 ] && startColour="${BG_RED}"
+        [ "${cpuRequestPercent}" -ge 100 ] && startColour="${BG_MAGENTA}"
+        cpuRequestPercent+="%"
+        while [ "${#cpuRequestPercent}" -lt 4 ]; do
+            cpuRequestPercent+=" "
+        done
+        echo -en "${FG_BLACK}${startColour}$(echo "  CPU Request ${cpuRequestPercent}  " | sed 's/.\{'"${cpuRequestsTwentieths}"'\}/&'"\\${endColour}"'/')${RESET} "
+
+        cpuLimitsPercent=$(awk '{gsub("\\(|\\)|%","");print $5}' <<< "${nodeOutput}")
+        cpuLimitsTwentieths=$(("${cpuLimitsPercent}" % 100 / 5))
+        startColour="${BG_CYAN}"
+        endColour="${BG_GREY}"
+        [ "${cpuLimitsPercent}" -ge 100 ] && endColour="${startColour}" && startColour="${BG_GREEN}"
+        [ "${cpuLimitsPercent}" -ge 200 ] && endColour="${startColour}" && startColour="${BG_YELLOW}"
+        [ "${cpuLimitsPercent}" -ge 300 ] && endColour="${startColour}" && startColour="${BG_RED}"
+        [ "${cpuLimitsPercent}" -ge 400 ] && endColour="${startColour}" && startColour="${BG_MAGENTA}"
+        [ "${cpuLimitsPercent}" -ge 500 ] && endColour="${startColour}" && startColour="${BG_MAGENTA}"
+        cpuLimitsPercent+="%"
+        while [ "${#cpuLimitsPercent}" -lt 4 ]; do
+            cpuLimitsPercent+=" "
+        done
+        echo -en "${FG_BLACK}${startColour}$(echo "   CPU Limit ${cpuLimitsPercent}   " | sed 's/.\{'"${cpuLimitsTwentieths}"'\}/&'"\\${endColour}"'/')${RESET} "
+      else
+        memRequestPercent=$(awk '{gsub("\\(|\\)|%","");print $3}' <<< "${nodeOutput}")
+        memRequestsTwentieths=$(("${memRequestPercent}" / 5))
+        startColour="${BG_CYAN}"
+        endColour="${BG_GREY}"
+        [ "${memRequestPercent}" -ge 50 ] && startColour="${BG_GREEN}"
+        [ "${memRequestPercent}" -ge 70 ] && startColour="${BG_YELLOW}"
+        [ "${memRequestPercent}" -ge 90 ] && startColour="${BG_RED}"
+        [ "${memRequestPercent}" -ge 100 ] && startColour="${BG_MAGENTA}"
+        memRequestPercent+="%"
+        while [ "${#memRequestPercent}" -lt 4 ]; do
+            memRequestPercent+=" "
+        done
+        echo -en "${FG_BLACK}${startColour}$(echo " Memory Request ${memRequestPercent}" | sed 's/.\{'"${memRequestsTwentieths}"'\}/&'"\\${endColour}"'/')${RESET} "
+
+        memLimitsPercent=$(awk '{gsub("\\(|\\)|%","");print $5}' <<< "${nodeOutput}")
+        memLimitsTwentieths=$(("${memLimitsPercent}" % 100 / 5))
+        startColour="${BG_CYAN}"
+        endColour="${BG_GREY}"
+        [ "${memLimitsPercent}" -ge 100 ] && endColour="${startColour}" && startColour="${BG_GREEN}"
+        [ "${memLimitsPercent}" -ge 200 ] && endColour="${startColour}" && startColour="${BG_YELLOW}"
+        [ "${memLimitsPercent}" -ge 300 ] && endColour="${startColour}" && startColour="${BG_RED}"
+        [ "${memLimitsPercent}" -ge 400 ] && endColour="${startColour}" && startColour="${BG_MAGENTA}"
+        [ "${memLimitsPercent}" -ge 500 ] && endColour="${startColour}" && startColour="${BG_MAGENTA}"
+        memLimitsPercent+="%"
+        while [ "${#memLimitsPercent}" -lt 4 ]; do
+            memLimitsPercent+=" "
+        done
+        echo -e "${FG_BLACK}${startColour}$(echo "  Memory Limit ${memLimitsPercent} " | sed 's/.\{'"${memLimitsTwentieths}"'\}/&'"\\${endColour}"'/')${RESET}"
+      fi
+    done | cat "${tempFile0}" - | ${SED} 's/\..*@/ /' | "${grepCommand[@]}" >> "${tempFile1}"
+  else
+    cat "${tempFile0}" >> "${tempFile1}"
+  fi
+#   if [[ -n "${printNodeInfo}" && ("$1" == "node" || "$1" == "nodes") ]]; then
+#     fullNodeOutput=$("${kubectlCommand}" describe node)
+#     grep "Ready" <<< "${fullNodeOutput}" | while read -r nodeOutput; do # TODO check for MemoryPressure DiskPressure PIDPressure Ready, colour node name
+#       ready=$(awk '{print $2}' <<< "${nodeOutput}")
+#     done | "${grepCommand[@]}" >> "${tempFile1}"
+#     grep "Name:" <<< "${fullNodeOutput}" | while read -r nodeOutput; do
+# #TODO everything
+#     done | "${grepCommand[@]}" >> "${tempFile1}"
+#     grep "cpu.*%" <<< "${fullNodeOutput}" | while read -r nodeOutput; do
+# #TODO everything
+#     done | "${grepCommand[@]}" >> "${tempFile1}"
+#     grep "memory.*%" <<< "${fullNodeOutput}" | while read -r nodeOutput; do
+# #TODO everything
+#     done | "${grepCommand[@]}" >> "${tempFile1}"
+#   fi
+  : > "${tempFile0}"
+}
+
+highlightClusterName() {
+  expectedPrefixesRegex="\(apps\|api\)\."
+  ${SED} -e 's/'"${expectedPrefixesRegex}"'/&'"\\${TEXT_NORMAL}"'/' -e 's/'"${expectedPrefixesRegex}"'[^.]*/&'"\\${TEXT_FAINT}"'/' <<< "${1}"
+}
+
+refreshTime=10
+kubectlCommand=kubectl
+grepCommand=(cat)
+printContainers="${CONTAINERS_NONE}"
+helmReleaseOutput="${HELM_RELEASE_NONE}"
+
+read -ra fullCommand <<< "$@"
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    # kubectl commands
+    -k|--resources|--detail-resources)
+      IFS="," read -ra kubeResources <<< "$2"
+      shift;;
+    -l|--list-resources)
+      IFS="," read -ra kubeResourcesToList <<< "$2"
+      shift;;
+    -s|--pod)
+      kubectlCommandOptions+=("$2")
+      specifiedResourceSelector="select(.metadata.name==\"$2\")"
+      shift;;
+    -o|--output)
+      kubectlCommandOptions+=(-o "$2")
+      shift;;
+    -f|--field-selector)
+      kubectlCommandOptions+=(--field-selector "$2")
+      shift;;
+    -L|--label-columns)
+      kubectlCommandOptions+=(-L "$2")
+      shift;;
+    -n|--namespace)
+      namespaceOutput=" (namespace ${FG_MAGENTA}$2${FG_DEFAULT})"
+      namespaceFlag=(-n "$2")
+      namespaceFlagLong+=(--namespace "$2")
+      shift;;
+    -A|--all-namespaces)
+      namespaceOutput=" (all namespaces)"
+      kubectlCommandOptions+=(--all-namespaces);;
+    -U)
+      printContainers="${CONTAINERS_UNREADY_RUNNING}";;
+    -c)
+      printContainers="${CONTAINERS_UNREADY}";;
+    -C)
+      printContainers="${CONTAINERS_ALL}";;
+    --containers)
+      printContainers=$2
+      shift;;
+    -N|--top-nodes)
+      printNodeInfo=true;;
+    # icp login options
+    -i|--ip)
+      cluster=$2
+      shift;;
+    -u|--user)
+      username=$2
+      shift;;
+    -p|--password)
+      password=$2
+      shift;;
+    # output formatting
+    -t|--refresh-time)
+      refreshTime=$2
+      shift;;
+    -x|--clear)
+      clearAll=1;;
+    -g|--grep)
+      grepCommand=(grep "$2")
+      shift;;
+    -v|--grep-invert)
+      grepCommand=(grep -v "$2")
+      shift;;
+    -h|--highlight)
+      highlightExtraString=$2
+      shift;;
+    -z|--zone-node-labels)
+      IFS="," read -ra zones <<< "$2"
+      shift;;
+    -m|--monochrome)
+      removeAnsiEscapes=1;;
+    -d|--describe)
+      kubectlCommandOptions+=("$2")
+      specifiedResourceSelector="select(.metadata.name==\"$2\")"
+      printContainers="${CONTAINERS_ALL}"
+      refreshTime=0
+      shift;;
+    # other
+    -r)
+      helmReleaseOutput="${HELM_RELEASE_NAMES}";;
+    -R)
+      helmReleaseOutput="${HELM_RELEASE_VERSIONS}";;
+    --helm-release)
+      helmReleaseOutput=$2
+      shift;;
+    -O|--oc)
+      kubectlCommand="oc";;
+    -?|--help)
+      readme="$(dirname "${BASH_SOURCE[0]}")/kx_README.md"
+      if command -v mdv; then
+        mdv "${readme}"
+      elif command -v markdown-cli; then
+        markdown-cli "${readme}"
+      else
+        cat "${readme}"
+      fi
+      exit 0;;
+    *)
+      echo -e "${FG_RED_DARK}ERROR:${FG_DEFAULT} invalid option [$1]"
+      exit 1;;
+  esac
+  shift
+done
+
+runningInContainer=false
+if [ -f /proc/self/cgroup ] && grep -q "docker" /proc/self/cgroup; then
+  runningInContainer=true
+fi
+
+if [[ -n ${cluster} && "${runningInContainer}" = false ]]; then
+  if [[ -n ${username} && -z ${password} ]]; then
+    read -rsp "Password for user ${username}: " password
+    echo
+    fullCommand+=(-p "${password}")
+  fi
+  docker run --rm -it --init "$(docker build -q "${0%/*}")" /kx "${fullCommand[@]}"
+else
+  tempFile0="/tmp/podstatus0$(date +%s)".txt
+  tempFile1="/tmp/podstatus1$(date +%s)".txt
+  tempFile2="/tmp/podstatus2$(date +%s)".txt
+
+  # Check for GNU sed
+  . utils.sh
+  sedCommandInlineRegex=("${SED}" -i -r)
+  if [ "${GNU_SED}" = false ]; then
+    sedCommandInlineRegex=("${SED}" -i '')
+  fi
+
+  # Get nodes for each zone
+  for ((i=0; i<${#zones[@]}; i++)); do
+    zoneNodes[${i}]=$("${kubectlCommand}" get nodes -l failure-domain.beta.kubernetes.io/zone="${zones[${i}]}" -o name)
+  done
+
+  linesToClear=0
+  while true; do
+    # Clear temporary files
+    : > "${tempFile0}"
+    echo -n "${TEXT_FAINT}" > "${tempFile1}"
+    # Print docker exec info
+    if [[ "${runningInContainer}" = true && -n ${HOSTNAME} ]]; then
+      echo "Run ${FG_CYAN}command${FG_DEFAULT} in this container: ${FG_BLUE}docker exec -it ${HOSTNAME} ${FG_CYAN}bash${FG_DEFAULT}" >> "${tempFile1}"
+    fi
+    # Print kubectl target info
+    target=$("${kubectlCommand}" cluster-info 2>/dev/null | ${SED} -n 's#.*master.*https://\([^ ]*\):.*#\1#p')
+    [ -z "${target}" ] && target="${cluster:-"unknown cluster"}"
+    printf "K8s on %b at " "${FG_CYAN}$(highlightClusterName "${target#*https://}")${FG_DEFAULT}${namespaceOutput}" >> "${tempFile1}" 2>&1
+    date '+%Y-%m-%d %H:%M:%S' >> "${tempFile1}"
+
+    if [[ ${helmReleaseOutput} != "${HELM_RELEASE_NONE}" ]]; then
+      if [[ "${helmReleaseOutput}" == "${HELM_RELEASE_NAMES}" ]]; then
+        # List helm release names
+        releases="$(helm list --tls -q "${namespaceFlagLong[@]}" | tr '\n' ' ')"
+      elif [[ "${helmReleaseOutput}" == "${HELM_RELEASE_VERSIONS}" ]]; then
+        # List helm release names and versions
+        releases="$(helm list --tls "${namespaceFlagLong[@]}" | tail -n +2 | awk -F"\t" '{print $1 "(" $5 ")"}' | tr -d ' ' | tr '\n' ' ')"
+      fi
+      echo "Helm releases: ${FG_YELLOW}${releases:-"${FG_DEFAULT}none"}${FG_DEFAULT}" >> "${tempFile1}"
+    fi
+    # List resource names
+    for ((i=0; i<${#kubeResourcesToList[@]}; i++)); do
+      resources="$("${kubectlCommand}" get "${kubeResourcesToList[${i}]}" "${namespaceFlag[@]}" --template '{{range .items}}{{.metadata.name}}{{"\n"}}{{end}}' 2>/dev/null | tr '\n' ' ')"
+      echo "${FG_BLUE}${kubeResourcesToList[${i}]}${FG_DEFAULT} resources: ${FG_YELLOW}${resources:-"${FG_DEFAULT}none"}${FG_DEFAULT}" >> "${tempFile1}"
+    done
+    echo -n "${TEXT_NORMAL}" >> "${tempFile1}"
+    # Get detailed resource info
+    if [[ ${#kubeResources[*]} -eq 0 ]]; then
+      getResources pods
+    else
+      for ((i=0; i<${#kubeResources[@]}; i++)); do
+        if [[ ${#kubeResources[*]} -gt 1 ]]; then
+          echo "${TEXT_FAINT}${FG_BLUE}${kubeResources[${i}]}${FG_DEFAULT} resources:${TEXT_NORMAL}" >> "${tempFile1}"
+        fi
+        getResources "${kubeResources[${i}]}"
+      done
+    fi
+
+    highlightFile "${tempFile1}" "${tempFile2}"
+    # Only use bottom-of-tree characters for the last container of each pod
+    "${sedCommandInlineRegex[@]}" '$!N;/'"${TREE_CHAR_FLAT}"'.*\n.*'"${TREE_CHAR_FLAT}"'/s/'"${TREE_CHAR_END}"'/'"${TREE_CHAR_MIDDLE}"'/;P;D' "${tempFile2}"
+
+    # Clear previous output
+    if [[ -n ${clearAll} ]]; then
+      clear
+    else
+      clearOutput ${linesToClear}
+    fi
+
+    if [[ -z ${removeAnsiEscapes} ]]; then
+      cat "${tempFile2}"
+    else
+      ${SED} $'s/\e\\[[0-9;:]*[a-zA-Z]//g' "${tempFile2}"
+    fi
+    if [[ ${refreshTime} -eq 0 ]]; then
+      break
+    fi
+    sleep "${refreshTime}";
+    linesToClear=$(wc -l < "${tempFile2}")
+  done
+fi
