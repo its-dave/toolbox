@@ -352,7 +352,7 @@ else
       echo "Run ${FG_CYAN}command${FG_DEFAULT} in this container: ${FG_BLUE}docker exec -it ${HOSTNAME} ${FG_CYAN}bash${FG_DEFAULT}" >> "${tempFile1}"
     fi
     # Print kubectl target info
-    target=$("${kubectlCommand}" cluster-info 2>/dev/null | ${SED} -n 's#.*master.*https://\([^ ]*\):.*#\1#p')
+    target=$("${kubectlCommand}" config view --minify -ojson | jq '.clusters[0].cluster.server' -r | ${SED} 's|https://\(.*\):\S*|\1|')
     [ -z "${target}" ] && target="${cluster:-"unknown cluster"}"
     printf "K8s on %b at " "${FG_CYAN}$(highlightClusterName "${target#*https://}")${FG_DEFAULT}${namespaceOutput}" >> "${tempFile1}" 2>&1
     date '+%Y-%m-%d %H:%M:%S' >> "${tempFile1}"
