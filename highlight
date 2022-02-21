@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+. colours.sh
+. utils.sh
+
+sedString1=""
+sedString2=""
+for string in "$@"; do
+  sedString1="${sedString1}"';s/.*'"${string}"'.*/'"\\${FG_GREEN_DARK}"'&'"\\${FG_DEFAULT}"'/g'
+  sedString2="${sedString2}"';s/'"${string}"'/'"\\${REV_ON}"'&'"\\${REV_OFF}"'/g'
+done
+echo -e "$(${SED} "${sedString1}" | ${SED} "${sedString2}")"
