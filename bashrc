@@ -57,7 +57,7 @@ parse_git_branch() {
 }
 
 parse_kubectl_target() {
- kubectl config view --minify -ojson | jq '. | "\(.clusters[0].cluster.server) \(.contexts[0].context.namespace)"' -r | gsed 's|https://[^\.]*\.\([^\.]*\)\.\S*|\1|'
+ kubectl config view --minify -ojson 2>/dev/null | jq '. | "\(.clusters[0].cluster.server) \(.contexts[0].context.namespace)"' -r | gsed 's|https://[^\.]*\.\([^\.]*\)\.\S*|\1|'
 }
 
 get_return_code() {
