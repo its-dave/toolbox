@@ -144,7 +144,9 @@ FG3=${FG[rando]}
 BG3=${BG[rando]}
 
 PS1="${TEXT_FAINT}Command exited with code \$(get_return_code)\n"
-PS1+="${TEXT_NORMAL}\$(get_sysload)${RESET} ${FG3}\$(parse_kubectl_target)${RESET}\n"
+if command -v pmset || command -v kubectl; then
+  PS1+="${TEXT_NORMAL}\$(get_sysload)${RESET} ${FG3}\$(parse_kubectl_target)${RESET}\n"
+fi
 PS1+="${FG_BLACK}${BG1}[\A]${BG_DEFAULT}${FG1} \u@\h ${FG_BLACK}${BG2}\w${BG_DEFAULT}${FG3} \$(parse_git_branch)${FG1}${BG_DEFAULT}\n"
 PS1+="\$${FG2} "
 export PS1
