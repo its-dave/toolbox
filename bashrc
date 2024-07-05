@@ -70,6 +70,7 @@ get_return_code() {
 
 get_sysload() {
   echo -en "\033[30m"
+  command -v pmset || return
   output=$(pmset -g sysload)
   for string in user battery thermal; do
     case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
