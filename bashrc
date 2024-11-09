@@ -27,9 +27,12 @@ shopt -s checkwinsize
 # E.g. typing !!<space> will replace the !! with your last command
 bind Space:magic-space
 
-# enable color support of ls
-export CLICOLOR=1
-export LSCOLORS=ExGxBxDxCxEgEdxbxgxcxd
+# coloured ls output
+if [[ "$(ls --version 2>/dev/null)" == *'coreutils'* ]]; then
+  alias ls='ls --color'
+else
+  export CLICOLOR=1
+fi
 # some more ls aliases
 alias ll='ls -alF'
 alias la='ls -A'
