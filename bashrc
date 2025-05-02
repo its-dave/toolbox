@@ -65,26 +65,26 @@ parse_kubectl_target() {
  kubectl config view --minify -ojson 2>/dev/null | jq '. | "\(.clusters[0].cluster.server) \(.contexts[0].context.namespace)"' -r | sed 's|https://[^\.]*\.\([^\.]*\)\.\S*|\1|'
 }
 
-get_return_code() {
+get_return_code_error() {
   code=$?
-  if [ $code -gt 0 ]; then
-    echo -en "\033[91m"
+  if [ ${code} -gt 0 ]; then
+    echo -e "${FG_BLACK}${BG_RED} Command exited with code ${code} ${RESET}"
+    echo $'\a'
   fi
-  echo $code
 }
 
 get_sysload() {
-  echo -en "\033[30m"
+  echo -en "${FG_BLACK}"
   command -v pmset || return
   output=$(pmset -g sysload)
   for string in user battery thermal; do
     case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
       Bad)
-        echo -en "\033[101m";;
+        echo -en "${BG_RED_DARK}";;
       OK)
-        echo -en "\033[103m";;
+        echo -en "${BG_YELLOW_DARK}";;
       Great)
-        echo -en "\033[102m";;
+        echo -en "${BG_GREEN_DARK}";;
     esac
     case "${string}" in
       user)
@@ -97,63 +97,58 @@ get_sysload() {
   done
 }
 
-# multi-line prompts require ansi codes to be wrapped in square brackets
-FG_DEFAULT="\[\033[39m\]"
-BG_DEFAULT="\[\033[49m\]"
-FG_GREY="\[\033[90m\]"
-BG_GREY="\[\033[100m\]"
-FG_BLACK="\[\033[30m\]"
-BG_BLACK="\[\033[40m\]"
-FG_RED="\[\033[91m\]"
-BG_RED="\[\033[101m\]"
-FG_RED_DARK="\[\033[31m\]"
-BG_RED_DARK="\[\033[41m\]"
-FG_GREEN="\[\033[92m\]"
-BG_GREEN="\[\033[102m\]"
-FG_GREEN_DARK="\[\033[32m\]"
-BG_GREEN_DARK="\[\033[42m\]"
-FG_YELLOW="\[\033[93m\]"
-BG_YELLOW="\[\033[103m\]"
-FG_YELLOW_DARK="\[\033[33m\]"
-BG_YELLOW_DARK="\[\033[43m\]"
-FG_BLUE="\[\033[94m\]"
-BG_BLUE="\[\033[104m\]"
-FG_BLUE_DARK="\[\033[34m\]"
-BG_BLUE_DARK="\[\033[44m\]"
-FG_MAGENTA="\[\033[95m\]"
-BG_MAGENTA="\[\033[105m\]"
-FG_MAGENTA_DARK="\[\033[35m\]"
-BG_MAGENTA_DARK="\[\033[45m\]"
-FG_CYAN="\[\033[96m\]"
-BG_CYAN="\[\033[106m\]"
-FG_CYAN_DARK="\[\033[36m\]"
-BG_CYAN_DARK="\[\033[46m\]"
-TEXT_BOLD="\[\033[1m\]"
-TEXT_FAINT="\[\033[2m\]"
-TEXT_NORMAL="\[\033[22m\]"
-REV_ON="\[\033[7m\]"
-REV_OFF="\[\033[27m\]"
-RESET="\[\033[0m\]"
+FG_WHITE="$(tput setaf 15)"
+BG_WHITE="$(tput setab 15)"
+FG_GREY="$(tput setaf 7)"
+BG_GREY="$(tput setab 7)"
+FG_GREY_DARK="$(tput setaf 8)"
+BG_GREY_DARK="$(tput setab 8)"
+FG_BLACK="$(tput setaf 0)"
+BG_BLACK="$(tput setab 0)"
+FG_RED="$(tput setaf 9)"
+BG_RED="$(tput setab 9)"
+FG_RED_DARK="$(tput setaf 1)"
+BG_RED_DARK="$(tput setab 1)"
+FG_GREEN="$(tput setaf 10)"
+BG_GREEN="$(tput setab 10)"
+FG_GREEN_DARK="$(tput setaf 2)"
+BG_GREEN_DARK="$(tput setab 2)"
+FG_YELLOW="$(tput setaf 11)"
+BG_YELLOW="$(tput setab 11)"
+FG_YELLOW_DARK="$(tput setaf 3)"
+BG_YELLOW_DARK="$(tput setab 3)"
+FG_BLUE="$(tput setaf 12)"
+BG_BLUE="$(tput setab 12)"
+FG_BLUE_DARK="$(tput setaf 4)"
+BG_BLUE_DARK="$(tput setab 4)"
+FG_MAGENTA="$(tput setaf 13)"
+BG_MAGENTA="$(tput setab 13)"
+FG_MAGENTA_DARK="$(tput setaf 5)"
+BG_MAGENTA_DARK="$(tput setab 5)"
+FG_CYAN="$(tput setaf 14)"
+BG_CYAN="$(tput setab 14)"
+FG_CYAN_DARK="$(tput setaf 6)"
+BG_CYAN_DARK="$(tput setab 6)"
+RESET="$(tput sgr0)"
 
-FG=("${FG_RED}" "${FG_GREEN}" "${FG_YELLOW}" "${FG_BLUE}" "${FG_MAGENTA}" "${FG_CYAN}")
-BG=("${BG_RED}" "${BG_GREEN}" "${BG_YELLOW}" "${BG_BLUE}" "${BG_MAGENTA}" "${BG_CYAN}")
+rando=$((RANDOM%6+9))
+FG1=$(tput setaf ${rando})
+BG1=$(tput setab ${rando})
+rando=$((RANDOM%6+9))
+FG2=$(tput setaf ${rando})
+BG2=$(tput setab ${rando})
+rando=$((RANDOM%6+9))
+FG3=$(tput setaf ${rando})
+BG3=$(tput setab ${rando})
 
-rando=$((RANDOM%${#FG[*]}))
-FG1=${FG[rando]}
-BG1=${BG[rando]}
-rando=$((RANDOM%${#FG[*]}))
-FG2=${FG[rando]}
-BG2=${BG[rando]}
-rando=$((RANDOM%${#FG[*]}))
-FG3=${FG[rando]}
-BG3=${BG[rando]}
-
-PS1="${TEXT_FAINT}Command exited with code \$(get_return_code)\n"
-if command -v pmset || command -v kubectl; then
-  PS1+="${TEXT_NORMAL}\$(get_sysload)${RESET} ${FG3}\$(parse_kubectl_target)${RESET}\n"
+# Ensure zero-length characters are wrapped in \[ \] in prompt to avoid redraw issues
+PS1="\$(get_return_code_error)"
+PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
+if command -v pmset; then
+  PS1+="\$(get_sysload)\[${BG_GREY_DARK}${FG_WHITE}\] " # System load
 fi
-PS1+="${FG_BLACK}${BG1}[\A]${BG_DEFAULT}${FG1} \u@\h ${FG_BLACK}${BG2}\w${BG_DEFAULT}${FG3} \$(parse_git_branch)${FG1}${BG_DEFAULT}\n"
-PS1+="\$${FG2} "
+PS1+="\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h \[${FG_BLACK}${BG1}\] \w \[${BG_BLACK}${FG3}\] \$(parse_git_branch)\n" # User, dir, branch
+PS1+="\[${FG1}${BG_BLACK}\]\$\[${FG2}\] " # Prompt
 export PS1
 trap 'tput sgr0' DEBUG
 
