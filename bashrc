@@ -75,7 +75,7 @@ get_return_code_error() {
 
 get_sysload() {
   echo -en "${FG_BLACK}"
-  command -v pmset || return
+  command -v pmset >/dev/null || return
   output=$(pmset -g sysload)
   for string in user battery thermal; do
     case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
@@ -144,7 +144,7 @@ BG3=$(tput setab ${rando})
 # Ensure zero-length characters are wrapped in \[ \] in prompt to avoid redraw issues
 PS1="\$(get_return_code_error)"
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
-if command -v pmset; then
+if command -v pmset >/dev/null; then
   PS1+="\$(get_sysload)\[${BG_GREY_DARK}${FG_WHITE}\] " # System load
 fi
 PS1+="\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h \[${FG_BLACK}${BG1}\] \w \[${BG_BLACK}${FG3}\] \$(parse_git_branch)\n" # User, dir, branch
