@@ -44,6 +44,7 @@ function cdls() {
 alias grep='grep --color'
 alias hgrep='history | grep -i'
 alias envgrep='env | grep -i'
+alias drun='docker run --rm -it'
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
