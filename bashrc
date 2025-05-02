@@ -96,15 +96,15 @@ get_sysload() {
       esac
     done
   else
-    cpuPercent=$(top -bn1 | awk '/%Cpu/ {printf "%.0f\n",$2}')
-    if [ "${cpuPercent}" -lt 10 ]; then
+    load=$(awk '{printf $1}' < /proc/loadavg)
+    if [ "${load%.*}" -lt 1 ]; then
       echo -en "${BG_GREEN_DARK}"
-    elif [ "${cpuPercent}" -lt 50 ]; then
+    elif [ "${load%.*}" -lt 2 ]; then
       echo -en "${BG_YELLOW_DARK}"
     else
       echo -en "${BG_RED_DARK}"
     fi
-    echo -n " ${cpuPercent}% "
+    echo -n " ${load} "
     battery=$(upower --enumerate 2>/dev/null | grep 'BAT')
     if [ -n "${battery}" ]; then
       batteryPercent=$(upower -i "${battery}" | awk '/percentage:/ {print $2}')
@@ -117,7 +117,7 @@ get_sysload() {
       fi
       echo -n " ${batteryPercent} "
     fi
-    averageTemp=$(cat /sys/class/thermal/thermal_zone*/temp | awk '{s+=$1}END{printf "%.0f\n",s/NR/1000}')
+    averageTemp=$(cat /sys/class/thermal/thermal_zone*/temp | awk '{s+=$1}END{printf "%.0f",s/NR/1000}')
     if [ "${averageTemp}" -lt 40 ]; then
       echo -en "${BG_GREEN_DARK}"
     elif [ "${averageTemp}" -lt 80 ]; then
