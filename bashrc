@@ -163,6 +163,7 @@ FG_CYAN="$(tput setaf 14)"
 BG_CYAN="$(tput setab 14)"
 FG_CYAN_DARK="$(tput setaf 6)"
 BG_CYAN_DARK="$(tput setab 6)"
+REVERSE="$(tput rev)"
 RESET="$(tput sgr0)"
 
 rando=$((RANDOM%6+9))
@@ -176,11 +177,10 @@ FG3=$(tput setaf ${rando})
 BG3=$(tput setab ${rando})
 
 POINTY_TRIANGLE_FG='🭬'
-POINTY_TRIANGLE_BG='🭨'
 if [ "$(uname)" = 'Darwin' ]; then # Symbols for Legacy Computing not included in default macOS fonts
-  POINTY_TRIANGLE_FG='▌'
-  POINTY_TRIANGLE_BG='▐'
+  POINTY_TRIANGLE_FG='▍'
 fi
+POINTY_TRIANGLE_BG="${REVERSE}${POINTY_TRIANGLE_FG}${RESET}"
 
 # Ensure zero-length characters are wrapped in \[ \] in prompt to avoid redraw issues
 PS1="\$(get_return_code_error)"
