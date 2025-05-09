@@ -74,9 +74,9 @@ get_return_code_error() {
 }
 
 get_sysload() {
-  colourGood="${FG_GREEN_DARK}🭨${BG_GREEN_DARK}${FG_BLACK}"
-  colourOk="${FG_YELLOW_DARK}🭨${BG_YELLOW_DARK}${FG_BLACK}"
-  colourBad="${FG_RED_DARK}🭨${BG_RED_DARK}${FG_BLACK}"
+  colourGood="${FG_GREEN_DARK}${POINTY_TRIANGLE_BG}${BG_GREEN_DARK}${FG_BLACK}"
+  colourOk="${FG_YELLOW_DARK}${POINTY_TRIANGLE_BG}${BG_YELLOW_DARK}${FG_BLACK}"
+  colourBad="${FG_RED_DARK}${POINTY_TRIANGLE_BG}${BG_RED_DARK}${FG_BLACK}"
   if command -v pmset >/dev/null; then
     output=$(pmset -g sysload)
     for string in user battery thermal; do
@@ -175,18 +175,25 @@ rando=$((RANDOM%6+9))
 FG3=$(tput setaf ${rando})
 BG3=$(tput setab ${rando})
 
+POINTY_TRIANGLE_FG='🭬'
+POINTY_TRIANGLE_BG='🭨'
+if [ "$(uname)" = 'Darwin' ]; then # Symbols for Legacy Computing not included in default macOS fonts
+  POINTY_TRIANGLE_FG='▌'
+  POINTY_TRIANGLE_BG='▐'
+fi
+
 # Ensure zero-length characters are wrapped in \[ \] in prompt to avoid redraw issues
 PS1="\$(get_return_code_error)"
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
 PS1+="\$(get_sysload)"
-PS1+="\[${FG_GREY_DARK}\]🭨" # Colour transition
+PS1+="\[${FG_GREY_DARK}\]${POINTY_TRIANGLE_BG}" # Colour transition
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
-PS1+="\[${FG_GREY_DARK}${BG1}\]🭬" # Colour transition
+PS1+="\[${FG_GREY_DARK}${BG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG_BLACK}\]\w " # Dir
-PS1+="\[${FG1}${BG_BLACK}\]🭬" # Colour transition
+PS1+="\[${FG1}${BG_BLACK}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG3}\]\$(parse_git_branch)\n"
 PS1+="\[${BG1}${FG_BLACK}\] \$ " # Prompt
-PS1+="\[${FG1}${BG_BLACK}\]🭬\[${FG2}\]" # Colour transition
+PS1+="\[${FG1}${BG_BLACK}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
 export PS1
 trap 'tput sgr0' DEBUG
 
