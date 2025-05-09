@@ -74,58 +74,60 @@ get_return_code_error() {
 }
 
 get_sysload() {
-  echo -en "${FG_BLACK}"
+  colourGood="${FG_GREEN_DARK}🭨${BG_GREEN_DARK}${FG_BLACK}"
+  colourOk="${FG_YELLOW_DARK}🭨${BG_YELLOW_DARK}${FG_BLACK}"
+  colourBad="${FG_RED_DARK}🭨${BG_RED_DARK}${FG_BLACK}"
   if command -v pmset >/dev/null; then
     output=$(pmset -g sysload)
     for string in user battery thermal; do
       case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
         Bad)
-          echo -en "${BG_RED_DARK}";;
+          echo -en "${colourBad}";;
         OK)
-          echo -en "${BG_YELLOW_DARK}";;
+          echo -en "${colourOk}";;
         Great)
-          echo -en "${BG_GREEN_DARK}";;
+          echo -en "${colourGood}";;
       esac
       case "${string}" in
         user)
-          echo -n " U ";;
+          echo -n "U ";;
         battery)
-          echo -n " B ";;
+          echo -n "B ";;
         thermal)
-          echo -n " T ";;
+          echo -n "T ";;
       esac
     done
   else
     load=$(awk '{printf $1}' < /proc/loadavg)
     if [ "${load%.*}" -lt 1 ]; then
-      echo -en "${BG_GREEN_DARK}"
+      echo -en "${colourGood}"
     elif [ "${load%.*}" -lt 2 ]; then
-      echo -en "${BG_YELLOW_DARK}"
+      echo -en "${colourOk}"
     else
-      echo -en "${BG_RED_DARK}"
+      echo -en "${colourBad}"
     fi
-    echo -n " ${load} "
+    echo -n "${load} "
     battery=$(upower --enumerate 2>/dev/null | grep 'BAT')
     if [ -n "${battery}" ]; then
       batteryPercent=$(upower -i "${battery}" | awk '/percentage:/ {print $2}')
       if [ "${batteryPercent%%%}" = 100 ]; then
-        echo -en "${BG_GREEN_DARK}"
+        echo -en "${colourGood}"
       elif [ "${batteryPercent%%%}" -gt 20 ]; then
-        echo -en "${BG_YELLOW_DARK}"
+        echo -en "${colourOk}"
       else
-        echo -en "${BG_RED_DARK}"
+        echo -en "${colourBad}"
       fi
-      echo -n " ${batteryPercent} "
+      echo -n "${batteryPercent} "
     fi
     averageTemp=$(cat /sys/class/thermal/thermal_zone*/temp | awk '{s+=$1}END{printf "%.0f",s/NR/1000}')
     if [ "${averageTemp}" -lt 40 ]; then
-      echo -en "${BG_GREEN_DARK}"
+      echo -en "${colourGood}"
     elif [ "${averageTemp}" -lt 80 ]; then
-      echo -en "${BG_YELLOW_DARK}"
+      echo -en "${colourOk}"
     else
-      echo -en "${BG_RED_DARK}"
+      echo -en "${colourBad}"
     fi
-    echo -n " ${averageTemp}°"
+    echo -n "${averageTemp}°"
   fi
 }
 
@@ -177,10 +179,14 @@ BG3=$(tput setab ${rando})
 PS1="\$(get_return_code_error)"
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
 PS1+="\$(get_sysload)"
-PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
-PS1+="\[${FG_BLACK}${BG1}\] \w " # Dir
-PS1+="\[${BG_BLACK}${FG3}\] \$(parse_git_branch)\n"
-PS1+="\[${FG1}${BG_BLACK}\]\$\[${FG2}\] " # Prompt
+PS1+="\[${FG_GREY_DARK}\]🭨" # Colour transition
+PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
+PS1+="\[${FG_GREY_DARK}${BG1}\]🭬" # Colour transition
+PS1+="\[${FG_BLACK}\]\w " # Dir
+PS1+="\[${FG1}${BG_BLACK}\]🭬" # Colour transition
+PS1+="\[${FG3}\]\$(parse_git_branch)\n"
+PS1+="\[${BG1}${FG_BLACK}\] \$ " # Prompt
+PS1+="\[${FG1}${BG_BLACK}\]🭬\[${FG2}\]" # Colour transition
 export PS1
 trap 'tput sgr0' DEBUG
 
