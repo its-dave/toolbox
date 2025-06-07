@@ -190,9 +190,9 @@ PS1+="\[${FG_GREY_DARK}\]${POINTY_TRIANGLE_BG}" # Colour transition
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
 PS1+="\[${FG_GREY_DARK}${BG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG_BLACK}\]\w " # Dir
-PS1+="\[${FG1}${BG_BLACK}\]${POINTY_TRIANGLE_FG}" # Colour transition
+PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG3}\]\$(parse_git_branch)\n"
 PS1+="\[${BG1}${FG_BLACK}\] \$ " # Prompt
-PS1+="\[${FG1}${BG_BLACK}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
+PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
 export PS1
 trap 'tput sgr0' DEBUG
