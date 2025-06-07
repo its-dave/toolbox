@@ -119,15 +119,15 @@ get_sysload() {
       fi
       echo -n "${batteryPercent} "
     fi
-    averageTemp=$(cat /sys/class/thermal/thermal_zone*/temp | awk '{s+=$1}END{printf "%.0f",s/NR/1000}')
-    if [ "${averageTemp}" -lt 40 ]; then
+    maxTemp=$(cat /sys/class/thermal/thermal_zone*/temp | sort --numeric-sort | tail -1)
+    if [ "${maxTemp}" -lt 40000 ]; then
       echo -en "${colourGood}"
-    elif [ "${averageTemp}" -lt 80 ]; then
+    elif [ "${maxTemp}" -lt 80000 ]; then
       echo -en "${colourOk}"
     else
       echo -en "${colourBad}"
     fi
-    echo -n "${averageTemp}°"
+    echo -n "$((maxTemp/1000))°"
   fi
 }
 
