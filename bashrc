@@ -176,8 +176,8 @@ rando=$((RANDOM%6+9))
 FG3=$(tput setaf ${rando})
 BG3=$(tput setab ${rando})
 
-POINTY_TRIANGLE_FG='🭬'
-if [ "$(uname)" = 'Darwin' ]; then # Symbols for Legacy Computing not included in default macOS fonts
+if [ -z "${POINTY_TRIANGLE_FG}" ]; then
+  echo "Symbols for Legacy Computing are not included in all fonts, export POINTY_TRIANGLE_FG='🭬' in .bashrc (or wherever this file is sourced) if this terminal is displaying the '🭬' character correctly"
   POINTY_TRIANGLE_FG='▍'
 fi
 POINTY_TRIANGLE_BG="${REVERSE}${POINTY_TRIANGLE_FG}${RESET}"
@@ -196,5 +196,3 @@ PS1+="\[${BG1}${FG_BLACK}\] \$ " # Prompt
 PS1+="\[${FG1}${BG_BLACK}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
 export PS1
 trap 'tput sgr0' DEBUG
-
-export PATH=~/bin:$PATH
