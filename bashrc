@@ -98,6 +98,7 @@ get_sysload() {
       esac
     done
   else
+    # Processes
     load=$(awk '{printf $1}' < /proc/loadavg)
     if [ "${load%.*}" -lt 1 ]; then
       echo -en "${colourGood}"
@@ -107,6 +108,22 @@ get_sysload() {
       echo -en "${colourBad}"
     fi
     echo -n "${load} "
+    # Memory
+    memory=$(free 2>/dev/null)
+    if [ -n "${memory}" ]; then
+      totalMemory=$(awk '/Mem:/ {print $2}' <<< "${memory}")
+      availableMemory=$(awk '/Mem:/ {print $7}' <<< "${memory}")
+      availablePercent=$((100*availableMemory/totalMemory))
+      if [ "${availablePercent}" -lt 10 ]; then
+        echo -en "${colourBad}"
+      elif [ "${availablePercent}" -lt 50 ]; then
+        echo -en "${colourOk}"
+      else
+        echo -en "${colourGood}"
+      fi
+      echo -n "$(free -h | awk '/Mem:/ {print $7}') "
+    fi
+    # Battery
     battery=$(upower --enumerate 2>/dev/null | grep 'BAT')
     if [ -n "${battery}" ]; then
       batteryPercent=$(upower -i "${battery}" | awk '/percentage:/ {print $2}')
@@ -119,6 +136,7 @@ get_sysload() {
       fi
       echo -n "${batteryPercent} "
     fi
+    # Temperature
     maxTemp=$(cat /sys/class/thermal/thermal_zone*/temp | sort --numeric-sort | tail -1)
     if [ "${maxTemp}" -lt 40000 ]; then
       echo -en "${colourGood}"
