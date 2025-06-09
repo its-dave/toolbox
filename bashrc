@@ -198,5 +198,5 @@ export PS1
 trap 'tput sgr0' DEBUG
 
 echo -e "${BG_CYAN}${FG_BLACK} Running $0 on $(hostname) ${RESET}"
-dfOutput=$(df -h | grep 'home') || dfOutput=$(df -h | grep '/$')
+dfOutput=$(df -P -h | grep -v '^map' | grep 'home') || dfOutput=$(df -P -h | grep '/$')
 echo -e "$(awk '{print $6}' <<< "${dfOutput}") filesystem is $(awk '{print $5}' <<< "${dfOutput}") full, $(awk '{print $4}' <<< "${dfOutput}") remaining"
