@@ -137,15 +137,17 @@ get_sysload() {
       echo -n "${batteryPercent} "
     fi
     # Temperature
-    maxTemp=$(cat /sys/class/thermal/thermal_zone*/temp | sort --numeric-sort | tail -1)
-    if [ "${maxTemp}" -lt 40000 ]; then
-      echo -en "${colourGood}"
-    elif [ "${maxTemp}" -lt 80000 ]; then
-      echo -en "${colourOk}"
-    else
-      echo -en "${colourBad}"
+    if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+      maxTemp=$(cat /sys/class/thermal/thermal_zone*/temp | sort --numeric-sort | tail -1)
+      if [ "${maxTemp}" -lt 40000 ]; then
+        echo -en "${colourGood}"
+      elif [ "${maxTemp}" -lt 80000 ]; then
+        echo -en "${colourOk}"
+      else
+        echo -en "${colourBad}"
+      fi
+      echo -n "$((maxTemp/1000))°"
     fi
-    echo -n "$((maxTemp/1000))°"
   fi
 }
 
