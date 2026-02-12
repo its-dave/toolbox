@@ -27,9 +27,13 @@ shopt -s checkwinsize
 # E.g. typing !!<space> will replace the !! with your last command
 bind Space:magic-space
 
-# enable color support of ls
-export CLICOLOR=1
-export LSCOLORS=ExGxBxDxCxEgEdxbxgxcxd
+# coloured ls output
+if [[ "$(ls --version 2>/dev/null)" == *'coreutils'* ]]; then
+  alias ls='ls --color'
+else
+  export CLICOLOR=1
+  export LSCOLORS=ExGxBxDxCxEgEdxbxgxcxd
+fi
 # some more ls aliases
 alias ll='ls -alF'
 alias la='ls -A'
@@ -40,6 +44,7 @@ function cdls() {
 alias grep='grep --color'
 alias hgrep='history | grep -i'
 alias envgrep='env | grep -i'
+alias drun='docker run --rm -it'
 
 # enable programmable completion features (you don't need to enable
 # this, if it's already enabled in /etc/bash.bashrc and /etc/profile
@@ -57,95 +62,161 @@ parse_git_branch() {
 }
 
 parse_kubectl_target() {
- kubectl config view --minify -ojson 2>/dev/null | jq '. | "\(.clusters[0].cluster.server) \(.contexts[0].context.namespace)"' -r | gsed 's|https://[^\.]*\.\([^\.]*\)\.\S*|\1|'
+ kubectl config view --minify -ojson 2>/dev/null | jq '. | "\(.clusters[0].cluster.server) \(.contexts[0].context.namespace)"' -r | sed 's|https://[^\.]*\.\([^\.]*\)\.\S*|\1|'
 }
 
-get_return_code() {
+get_return_code_error() {
   code=$?
-  if [ $code -gt 0 ]; then
-    echo -en "\033[91m"
+  if [ ${code} -gt 0 ]; then
+    echo -e "${FG_BLACK}${BG_RED} Command exited with code ${code} ${RESET}"
+    echo $'\a'
   fi
-  echo $code
 }
 
 get_sysload() {
-  echo -en "\033[30m"
-  output=$(pmset -g sysload)
-  for string in user battery thermal; do
-    case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
-      Bad)
-        echo -en "\033[101m";;
-      OK)
-        echo -en "\033[103m";;
-      Great)
-        echo -en "\033[102m";;
-    esac
-    case "${string}" in
-      user)
-        echo -n " U ";;
-      battery)
-        echo -n " B ";;
-      thermal)
-        echo -n " T ";;
-    esac
-  done
+  colourGood="${FG_GREEN_DARK}${POINTY_TRIANGLE_BG}${BG_GREEN_DARK}${FG_BLACK}"
+  colourOk="${FG_YELLOW_DARK}${POINTY_TRIANGLE_BG}${BG_YELLOW_DARK}${FG_BLACK}"
+  colourBad="${FG_RED_DARK}${POINTY_TRIANGLE_BG}${BG_RED_DARK}${FG_BLACK}"
+  if command -v pmset >/dev/null; then
+    output=$(pmset -g sysload)
+    for string in user battery thermal; do
+      case "$(awk '/'"${string}"'/ {print $5}' <<< "${output}")" in
+        Bad)
+          echo -en "${colourBad}";;
+        OK)
+          echo -en "${colourOk}";;
+        Great)
+          echo -en "${colourGood}";;
+      esac
+      case "${string}" in
+        user)
+          echo -n "U ";;
+        battery)
+          echo -n "B ";;
+        thermal)
+          echo -n "T ";;
+      esac
+    done
+  else
+    # Processes
+    load=$(awk '{printf $1}' < /proc/loadavg)
+    if [ "${load%.*}" -lt 1 ]; then
+      echo -en "${colourGood}"
+    elif [ "${load%.*}" -lt 2 ]; then
+      echo -en "${colourOk}"
+    else
+      echo -en "${colourBad}"
+    fi
+    echo -n "${load} "
+    # Memory
+    memory=$(free 2>/dev/null)
+    if [ -n "${memory}" ]; then
+      totalMemory=$(awk '/Mem:/ {print $2}' <<< "${memory}")
+      availableMemory=$(awk '/Mem:/ {print $7}' <<< "${memory}")
+      availablePercent=$((100*availableMemory/totalMemory))
+      if [ "${availablePercent}" -lt 10 ]; then
+        echo -en "${colourBad}"
+      elif [ "${availablePercent}" -lt 50 ]; then
+        echo -en "${colourOk}"
+      else
+        echo -en "${colourGood}"
+      fi
+      echo -n "$(free -h | awk '/Mem:/ {print $7}') "
+    fi
+    # Battery
+    battery=$(upower --enumerate 2>/dev/null | grep 'BAT')
+    if [ -n "${battery}" ]; then
+      batteryPercent=$(upower -i "${battery}" | awk '/percentage:/ {print $2}')
+      if [ "${batteryPercent%%%}" = 100 ]; then
+        echo -en "${colourGood}"
+      elif [ "${batteryPercent%%%}" -gt 20 ]; then
+        echo -en "${colourOk}"
+      else
+        echo -en "${colourBad}"
+      fi
+      echo -n "${batteryPercent} "
+    fi
+    # Temperature
+    if [ -f /sys/class/thermal/thermal_zone0/temp ]; then
+      maxTemp=$(cat /sys/class/thermal/thermal_zone*/temp | sort --numeric-sort | tail -1)
+      if [ "${maxTemp}" -lt 40000 ]; then
+        echo -en "${colourGood}"
+      elif [ "${maxTemp}" -lt 80000 ]; then
+        echo -en "${colourOk}"
+      else
+        echo -en "${colourBad}"
+      fi
+      echo -n "$((maxTemp/1000))°"
+    fi
+  fi
 }
 
-# multi-line prompts require ansi codes to be wrapped in square brackets
-FG_DEFAULT="\[\033[39m\]"
-BG_DEFAULT="\[\033[49m\]"
-FG_GREY="\[\033[90m\]"
-BG_GREY="\[\033[100m\]"
-FG_BLACK="\[\033[30m\]"
-BG_BLACK="\[\033[40m\]"
-FG_RED="\[\033[91m\]"
-BG_RED="\[\033[101m\]"
-FG_RED_DARK="\[\033[31m\]"
-BG_RED_DARK="\[\033[41m\]"
-FG_GREEN="\[\033[92m\]"
-BG_GREEN="\[\033[102m\]"
-FG_GREEN_DARK="\[\033[32m\]"
-BG_GREEN_DARK="\[\033[42m\]"
-FG_YELLOW="\[\033[93m\]"
-BG_YELLOW="\[\033[103m\]"
-FG_YELLOW_DARK="\[\033[33m\]"
-BG_YELLOW_DARK="\[\033[43m\]"
-FG_BLUE="\[\033[94m\]"
-BG_BLUE="\[\033[104m\]"
-FG_BLUE_DARK="\[\033[34m\]"
-BG_BLUE_DARK="\[\033[44m\]"
-FG_MAGENTA="\[\033[95m\]"
-BG_MAGENTA="\[\033[105m\]"
-FG_MAGENTA_DARK="\[\033[35m\]"
-BG_MAGENTA_DARK="\[\033[45m\]"
-FG_CYAN="\[\033[96m\]"
-BG_CYAN="\[\033[106m\]"
-FG_CYAN_DARK="\[\033[36m\]"
-BG_CYAN_DARK="\[\033[46m\]"
-TEXT_BOLD="\[\033[1m\]"
-TEXT_FAINT="\[\033[2m\]"
-TEXT_NORMAL="\[\033[22m\]"
-REV_ON="\[\033[7m\]"
-REV_OFF="\[\033[27m\]"
-RESET="\[\033[0m\]"
+FG_WHITE="$(tput setaf 15)"
+BG_WHITE="$(tput setab 15)"
+FG_GREY="$(tput setaf 7)"
+BG_GREY="$(tput setab 7)"
+FG_GREY_DARK="$(tput setaf 8)"
+BG_GREY_DARK="$(tput setab 8)"
+FG_BLACK="$(tput setaf 0)"
+BG_BLACK="$(tput setab 0)"
+FG_RED="$(tput setaf 9)"
+BG_RED="$(tput setab 9)"
+FG_RED_DARK="$(tput setaf 1)"
+BG_RED_DARK="$(tput setab 1)"
+FG_GREEN="$(tput setaf 10)"
+BG_GREEN="$(tput setab 10)"
+FG_GREEN_DARK="$(tput setaf 2)"
+BG_GREEN_DARK="$(tput setab 2)"
+FG_YELLOW="$(tput setaf 11)"
+BG_YELLOW="$(tput setab 11)"
+FG_YELLOW_DARK="$(tput setaf 3)"
+BG_YELLOW_DARK="$(tput setab 3)"
+FG_BLUE="$(tput setaf 12)"
+BG_BLUE="$(tput setab 12)"
+FG_BLUE_DARK="$(tput setaf 4)"
+BG_BLUE_DARK="$(tput setab 4)"
+FG_MAGENTA="$(tput setaf 13)"
+BG_MAGENTA="$(tput setab 13)"
+FG_MAGENTA_DARK="$(tput setaf 5)"
+BG_MAGENTA_DARK="$(tput setab 5)"
+FG_CYAN="$(tput setaf 14)"
+BG_CYAN="$(tput setab 14)"
+FG_CYAN_DARK="$(tput setaf 6)"
+BG_CYAN_DARK="$(tput setab 6)"
+REVERSE="$(tput rev)"
+RESET="$(tput sgr0)"
 
-FG=("${FG_RED}" "${FG_GREEN}" "${FG_YELLOW}" "${FG_BLUE}" "${FG_MAGENTA}" "${FG_CYAN}")
-BG=("${BG_RED}" "${BG_GREEN}" "${BG_YELLOW}" "${BG_BLUE}" "${BG_MAGENTA}" "${BG_CYAN}")
+rando=$((RANDOM%6+9))
+FG1=$(tput setaf ${rando})
+BG1=$(tput setab ${rando})
+rando=$((RANDOM%6+9))
+FG2=$(tput setaf ${rando})
+BG2=$(tput setab ${rando})
+rando=$((RANDOM%6+9))
+FG3=$(tput setaf ${rando})
+BG3=$(tput setab ${rando})
 
-rando=$((RANDOM%${#FG[*]}))
-FG1=${FG[rando]}
-BG1=${BG[rando]}
-rando=$((RANDOM%${#FG[*]}))
-FG2=${FG[rando]}
-BG2=${BG[rando]}
-rando=$((RANDOM%${#FG[*]}))
-FG3=${FG[rando]}
-BG3=${BG[rando]}
+if [ -z "${POINTY_TRIANGLE_FG}" ]; then
+  echo "Symbols for Legacy Computing are not included in all fonts, export POINTY_TRIANGLE_FG='🭬' in .bashrc (or wherever this file is sourced) if this terminal is displaying the '🭬' character correctly"
+  POINTY_TRIANGLE_FG='▍'
+fi
+POINTY_TRIANGLE_BG="${REVERSE}${POINTY_TRIANGLE_FG}${RESET}"
 
-export PS1="${TEXT_FAINT}Command exited with code \$(get_return_code)\n\
-${TEXT_NORMAL}\$(get_sysload)${RESET} ${FG3}\$(parse_kubectl_target)${RESET}\n\
-${FG_BLACK}${BG1}[\A]${BG_DEFAULT}${FG1} \u@\h ${FG_BLACK}${BG2}\w${BG_DEFAULT}${FG3} \$(parse_git_branch)${FG1}${BG_DEFAULT}\n\
-\$${FG2} "
+# Ensure zero-length characters are wrapped in \[ \] in prompt to avoid redraw issues
+PS1="\$(get_return_code_error)"
+PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
+PS1+="\$(get_sysload)"
+PS1+="\[${FG_GREY_DARK}\]${POINTY_TRIANGLE_BG}" # Colour transition
+PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
+PS1+="\[${FG_GREY_DARK}${BG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
+PS1+="\[${FG_BLACK}\]\w " # Dir
+PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
+PS1+="\[${FG3}\]\$(parse_git_branch)\n"
+PS1+="\[${BG1}${FG_BLACK}\] \$ " # Prompt
+PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
+export PS1
 trap 'tput sgr0' DEBUG
 
-export PATH=~/bin:$PATH
+echo -e "${BG_CYAN}${FG_BLACK} Running $0 on $(hostname) ${RESET}"
+dfOutput=$(df -P -h 2>/dev/null | grep -v '^map' | grep 'home') || dfOutput=$(df -P -h 2>/dev/null | grep '/$')
+echo -e "$(awk '{print $6}' <<< "${dfOutput}") filesystem is $(awk '{print $5}' <<< "${dfOutput}") full, $(awk '{print $4}' <<< "${dfOutput}") remaining"
