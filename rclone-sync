@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+rcloneDir="${HOME}/rclone"
+id="${1:?"usage: $0 dirName"}"
+localDir="${rcloneDir}/${id}"
+[ -d "${localDir}" ] || { echo "ERROR: '${localDir}' is not a directory"; exit 1; }
+remoteName="remote-${id}"
+[ -n "$(rclone listremotes --name "${remoteName}")" ] || { echo "ERROR: '${remoteName}' is not a defined remote"; exit 1; }
+[[ "${id}" = *"google"* ]] && extraParams+=('--google-drive')
+[[ "${id}" = *"onedrive"* ]] && extraParams+=('--onedrive')
+"$(dirname "$0")/rclone-bisync.sh" \
+    --remote-name "${remoteName}:" \
+    --local-dir "${localDir}" \
+    "${extraParams[@]}"
