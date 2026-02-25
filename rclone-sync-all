@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+rcloneDir="${HOME}/rclone"
+for file in "${rcloneDir}"/*; do
+    [ -d "${file}" ] || continue
+    [[ "${file}" != *-backup ]] || continue
+    id="${file##*/}"
+    extraParams=()
+    [[ "${id}" = *"google"* ]] && extraParams+=('--google-drive')
+    [[ "${id}" = *"onedrive"* ]] && extraParams+=('--onedrive')
+    "$(dirname "$0")/rclone-bisync.sh" \
+        --remote-name "remote-${id}:" \
+        --local-dir "${rcloneDir}/${id}" \
+        "${extraParams[@]}"
+done
