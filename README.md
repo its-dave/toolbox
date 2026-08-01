@@ -15,6 +15,7 @@
 ## rclone bisync
 * The `rclone-bisync.sh` script is a wrapper for `rclone bisync` with some specific options for google drive and onedrive, as well as backups and some other general options
     * The local dir must have already been created with `rclone bisync --resync`
+    * It firsts checks for updates but these must be manually installed with `rclone selfupdate`
 * The `rclone-sync` script runs `rclone-bisync.sh` for a specified folder with the same name prefix as a defined remote
     * e.g. `rclone-sync name` would run `rclone bisync` for a directory at `~/rclone/id/` and a remote called `remote-id:`
     * The `rclone-sync-all` script runs the same for all directories in `~/rclone/`

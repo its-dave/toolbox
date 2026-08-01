@@ -30,6 +30,7 @@ done
 [ -n "${remoteName}" ] || { echo "ERROR: missing remote name, usage: $0 --local-dir '/path/to/local' --remote-name 'remote1:'"; exit 1; }
 
 set -x
+rclone selfupdate --check
 rclone bisync \
     "${remoteName}/" "${localDir}" \
     --compare size,modtime,checksum \
