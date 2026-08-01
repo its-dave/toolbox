@@ -207,7 +207,12 @@ PS1="\$(get_return_code_error)"
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\] \A " # Time
 PS1+="\$(get_sysload)"
 PS1+="\[${FG_GREY_DARK}\]${POINTY_TRIANGLE_BG}" # Colour transition
-PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@\[${FG_WHITE}\]\h " # User
+PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@" # User
+if [ -z "${CONTAINER_ID}" ]; then
+  PS1+="\[${FG_WHITE}\]\h " # hostname
+else
+  PS1+="\[${FG_RED_DARK}\]${CONTAINER_ID} " # container
+fi
 PS1+="\[${FG_GREY_DARK}${BG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG_BLACK}\]\w " # Dir
 PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
