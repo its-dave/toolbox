@@ -210,8 +210,10 @@ PS1+="\[${FG_GREY_DARK}\]${POINTY_TRIANGLE_BG}" # Colour transition
 PS1+="\[${BG_GREY_DARK}${FG_WHITE}\]\u\[${FG_GREY}\]@" # User
 if [ -z "${CONTAINER_ID}" ]; then
   PS1+="\[${FG_WHITE}\]\h " # hostname
+  machineId=" $(hostname)"
 else
   PS1+="\[${FG_RED_DARK}\]${CONTAINER_ID} " # container
+  machineId="${BG_RED_DARK}${FG_WHITE} ${CONTAINER_ID}"
 fi
 PS1+="\[${FG_GREY_DARK}${BG1}\]${POINTY_TRIANGLE_FG}" # Colour transition
 PS1+="\[${FG_BLACK}\]\w " # Dir
@@ -222,6 +224,6 @@ PS1+="\[${RESET}${FG1}\]${POINTY_TRIANGLE_FG}\[${FG2}\]" # Colour transition
 export PS1
 trap 'tput sgr0' DEBUG
 
-echo -e "${BG_CYAN}${FG_BLACK} Running $0 on $(hostname) ${RESET}"
+echo -e "${BG_CYAN}${FG_BLACK} Running $0 on${machineId} ${RESET}"
 dfOutput=$(df -P -h 2>/dev/null | grep -v '^map' | grep 'home') || dfOutput=$(df -P -h 2>/dev/null | grep '/$')
 echo -e "$(awk '{print $6}' <<< "${dfOutput}") filesystem is $(awk '{print $5}' <<< "${dfOutput}") full, $(awk '{print $4}' <<< "${dfOutput}") remaining"
